@@ -7,8 +7,12 @@ RANGES = {
     'objectwindow x': (0, 1800)
 }
 
+class CaseConfigParser(configparser.ConfigParser):
+    def optionxform(self, optionstr):
+        return optionstr
+
 def check_and_fix_ranges(config_file):
-    config = configparser.ConfigParser()
+    config = CaseConfigParser()
     config.read(config_file)
 
     errors = []

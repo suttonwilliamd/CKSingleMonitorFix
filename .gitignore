@@ -1,0 +1,26 @@
+
+/Backup
+/Edit Scripts
+/Mopy
+/Papyrus Compiler
+/Themes
+/Logs
+/OPAL
+/Optional
+/lex
+*.dll
+*.exe
+*.txt
+*.rtf
+*.md
+/Tools
+CreationKit.ini
+CreationKitPlatformExtended.ini
+*.log
+*.log1
+*.database
+*.ini
+*.pak
+/Data
+*.vdf
+Skyrim.ccc
