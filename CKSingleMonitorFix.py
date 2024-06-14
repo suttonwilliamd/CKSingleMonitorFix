@@ -23,6 +23,7 @@ def check_and_fix_ranges(config_file):
             if key in RANGES:
                 min_val, max_val = RANGES[key]
                 try:
+                    original_value = value
                     value = float(value)
                     print(f"Converted value of {key} in section {section}: {value} (range {min_val}-{max_val})")  # Debugging print statement
                     if not (min_val <= value <= max_val):
