@@ -19,12 +19,12 @@ def check_and_fix_ranges(config_file):
 
     for section in config.sections():
         for key, value in config.items(section):
-            print(f"Checking {key} in section {section} with value {value}")  # Debugging print statement
+            print(f"Checking {key} in section {section} with value '{value}'")  # Debugging print statement
             if key in RANGES:
                 min_val, max_val = RANGES[key]
                 try:
                     value = float(value)
-                    print(f"{key} in section {section}: {value} (range {min_val}-{max_val})")  # Debugging print statement
+                    print(f"Converted value of {key} in section {section}: {value} (range {min_val}-{max_val})")  # Debugging print statement
                     if not (min_val <= value <= max_val):
                         errors.append(f"Error: {key} in section {section} is out of range ({value} not in {min_val}-{max_val}). Setting to 0.")
                         config.set(section, key, '0')
