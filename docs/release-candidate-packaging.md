@@ -11,9 +11,11 @@ There was no existing ZIP/manifest release packager in that path.
 
 The operator must obtain the actual qualified EXE from the authorized root's
 verified artifact store, plus exact `artifact-verification.json` and `report.json`
-bytes. **No real EXE is provisioned in this service workspace. No real release
-bundle was produced here.** Local unit-test `.exe` fixtures contain text labelled
-synthetic, NOT Windows binaries; passing those tests is not Windows acceptance.
+bytes. **At the implementation/review handoff, the real EXE had not been
+provisioned and no real candidate bundle had been produced.** Later root packaging
+is a separate evidence-backed operation, not new Windows qualification. Local
+unit-test `.exe` fixtures contain text labelled synthetic, NOT Windows binaries;
+passing those tests is not Windows acceptance.
 
 The tool checks explicit expected EXE SHA256/size against bytes, verification and
 schema-2 report; report raw-byte SHA256 against verification; source and run IDs;
@@ -46,15 +48,18 @@ root** must provision its downloaded qualified EXE as
 `$W/evidence/WIL-132/provisioned/CKSingleMonitorFix.exe` (not a rebuild, and not a
 synthetic placeholder). This is a future root action, not performed by the worker.
 Keep all approval/recovery/BOARD holds; this local command authorizes no publication.
-On the root's Linux workspace, run:
+Use a root-owned reviewed checkout, not another writer's checkout or a Git ownership
+bypass. If the candidate output already exists, preserve it and select a fresh
+output directory. On the root's Linux workspace, adapt the checkout path and run:
 
 ```bash
 W=/srv/apps/garfield/company-work/token-burn-20261025
-R="$W/repos/ck-release-package-wil132"
+R=/absolute/path/to/root-owned-reviewed-checkout
 # Must name the reviewed packaging commit, not an unreviewed working tree.
 PACKAGER_SHA=$(git -C "$R" rev-parse HEAD)
-# Operator-supplied real packaging run identifier; never borrow an old run ID.
-: "${PAPERCLIP_RUN_ID:?Use the active authorized root run or set an honest local run ID}"
+# Metadata only: use the actual authorized run or an honest local operation label.
+# Never invent/set PAPERCLIP_RUN_ID or borrow another execution's authenticated context.
+: "${PACKAGING_RUN:?Set an honest packaging operation identifier}"
 mkdir -p "$W/cache/ck-root-package/home" "$W/cache/ck-root-package/tmp"
 HOME="$W/cache/ck-root-package/home" TMPDIR="$W/cache/ck-root-package/tmp" \
 PYTHONDONTWRITEBYTECODE=1 python3 "$R/tools/package_release_candidate.py" \
@@ -65,7 +70,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 "$R/tools/package_release_candidate.py" \
   --expected-size 8536232 \
   --source-sha 2fc26d7abdc8cc4104d9939e3ac3e541c7eb0a14 \
   --qualification-run 40296635018 \
-  --packager-source "$PACKAGER_SHA" --packaging-run "$PAPERCLIP_RUN_ID" \
+  --packager-source "$PACKAGER_SHA" --packaging-run "$PACKAGING_RUN" \
   --name CKSingleMonitorFix-windows-amd64-rc1 \
   --output "$W/evidence/WIL-132/CKSingleMonitorFix-windows-amd64-rc1"
 # Only after command success:
