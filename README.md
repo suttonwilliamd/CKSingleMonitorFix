@@ -14,6 +14,9 @@ working directory, **not** an automatically discovered game directory.
 A standalone Windows EXE **qualification candidate**, not a release, is documented
 in [Windows frozen CLI qualification](docs/windows-frozen-cli.md). Building needs
 Python; only a successful actual hosted Windows job qualifies the resulting EXE.
+An [offline release-candidate packager](docs/release-candidate-packaging.md)
+can wrap explicitly supplied qualified bytes and evidence; it never executes or
+publishes an EXE and does not turn synthetic packaging tests into Windows proof.
 
 ## PowerShell quick start
 
