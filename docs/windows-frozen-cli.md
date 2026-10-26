@@ -25,6 +25,22 @@ Python, checked-out SHA and EXE SHA256/size are recorded by qualification. This 
 not a reproducible-build claim. PyInstaller must build on Windows, not cross-build
 from this Linux workspace.
 
+The spec passes `('X utf8=1', None, 'OPTION')` to `EXE`, the permanent
+interpreter option documented by PyInstaller 6.16.0 (spec-files, "Specifying
+Python Interpreter Options"). Its bootloader parses `utf8` before interpreter
+initialization. This is not an environment-variable workaround: frozen Python
+ignores normal `PYTHONUTF8` configuration. It makes piped backup-path diagnostics
+Unicode-safe without changing application code. A controlled source regression
+shows that a strict cp1252 output pipe can fail *after* the bytes and backup are
+correct, whereas UTF-8 succeeds. That analogue supports this packaging fix, but
+does not establish the exact cause of the first hosted failure or qualify an EXE.
+The original failed report lacked exit/error-class diagnostics.
+
+Fake helper children use only the same `SystemRoot`/`WINDIR` OS allowlist as the
+smoke helper, not the full caller environment. CPython 3.9's empty environment
+block construction lacks the explicit two-NUL empty-block handling present in
+3.13. No timeout, output, descendant or Windows Job checks are relaxed.
+
 ## Actual qualification (ephemeral hosted Windows CI only)
 
 The additional job in `.github/workflows/tests.yml` preserves the existing
@@ -68,7 +84,12 @@ literal byte oracle exercises:
 `frozen-evidence/report.json` is initialized to fixed failure data before install
 and retained even on failure (runner cancellation/artifact-service failure can
 still prevent upload). Successful reports include exact source/Python/freezer,
-platform, EXE size/SHA256, boolean case outcomes. They contain no raw paths,
+platform, EXE size/SHA256, boolean case outcomes. Schema 2 also records each
+invocation's integer return code, health boolean and a fixed
+`unicode_encode_error` boolean (presence of the literal `UnicodeEncodeError` in
+bounded stderr, not proof of exception origin). These diagnostics never influence
+the acceptance decision; a repair still requires a healthy exit 0 and all byte,
+backup and state oracles. They contain no raw paths,
 environment, INI, stdout/stderr or exceptions. Report retention is one day. The
 EXE artifact is uploaded for one day **only if all actual cases pass**. There is
 no automatic tag, GitHub Release, deployment or publication.

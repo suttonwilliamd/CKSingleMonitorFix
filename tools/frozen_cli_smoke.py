@@ -146,7 +146,7 @@ def pe_amd64(path):
                 and header[24:26] == b'\x0b\x02')
 
 
-def smoke(executable, timeout=15, total=180, results=None):
+def smoke(executable, timeout=15, total=180, results=None, diagnostics=None):
     if results is None:
         results = {}
     deadline = time.monotonic() + total
@@ -169,6 +169,11 @@ def smoke(executable, timeout=15, total=180, results=None):
             rc, out, err, healthy = run_child([str(executable)] + args, cwd, env,
                                               min(timeout, remaining))
             results[name] = healthy and rc == code
+            if diagnostics is not None:
+                # Fixed keys and scalar values only; never retain child output,
+                # exception messages, paths, or a parsed arbitrary error class.
+                diagnostics[name] = {'rc': rc, 'healthy': healthy,
+                                     'unicode_encode_error': b'UnicodeEncodeError' in err}
             return out, err
         out, err = invoke('help', ['--help'], 0)
         results['help'] &= b'--dry-run' in out and not err
@@ -227,7 +232,7 @@ def main(argv=None):
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--source-sha', required=True)
     args = parser.parse_args(argv)
-    report = {'schema': 1, 'status': 'fail', 'cases': {}, 'helper_error': True}
+    report = {'schema': 2, 'status': 'fail', 'cases': {}, 'diagnostics': {}, 'helper_error': True}
     try:
         import re
         import importlib.metadata
@@ -238,7 +243,7 @@ def main(argv=None):
         report.update(source_sha=args.source_sha, python=platform.python_version(),
                       freezer=importlib.metadata.version('pyinstaller'), platform='Windows-AMD64',
                       exe_size=exe.stat().st_size, exe_sha256=hashlib.sha256(exe.read_bytes()).hexdigest())
-        smoke(exe, results=report['cases'])
+        smoke(exe, results=report['cases'], diagnostics=report['diagnostics'])
         report['helper_error'] = False
         if report['cases'] and all(report['cases'].values()):
             report['status'] = 'pass'

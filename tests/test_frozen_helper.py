@@ -22,7 +22,28 @@ SPEC.loader.exec_module(helper)
 class HelperTests(unittest.TestCase):
     def run_fake(self, code, timeout=2):
         with tempfile.TemporaryDirectory() as directory:
-            return helper.run_child([sys.executable, '-c', code], Path(directory), {}, timeout)
+            # CPython 3.9 builds a single-NUL block for env={}; Windows needs
+            # two terminators. Keep the same minimal OS allowlist as smoke().
+            env = {k: os.environ[k] for k in ('SystemRoot', 'WINDIR') if k in os.environ}
+            return helper.run_child([sys.executable, '-c', code], Path(directory), env, timeout)
+
+    def test_fake_environment_is_os_allowlist_only(self):
+        with mock.patch.dict(os.environ, {'SystemRoot': 'os-root', 'WINDIR': 'os-dir',
+                                         'SECRET_TOKEN': 'private', 'PATH': 'private'}, clear=True):
+            with mock.patch.object(helper, 'run_child', return_value=(0, b'', b'', True)) as child:
+                self.run_fake('pass')
+        self.assertEqual(child.call_args[0][2], {'SystemRoot': 'os-root', 'WINDIR': 'os-dir'})
+
+    def test_diagnostics_are_fixed_and_do_not_accept_failed_exit(self):
+        diagnostics = {}
+        def failed(command, cwd, env, timeout):
+            return 1, b'PRIVATE_PATH', b'PRIVATE_PATH UnicodeEncodeError: PRIVATE_TEXT', True
+        with mock.patch.object(helper, 'run_child', side_effect=failed):
+            result = helper.smoke(Path('/fake.exe'), diagnostics=diagnostics)
+        self.assertFalse(result['utf8_modify'])
+        self.assertEqual(diagnostics['utf8_modify'],
+                         {'rc': 1, 'healthy': True, 'unicode_encode_error': True})
+        self.assertNotIn('PRIVATE', json.dumps(diagnostics))
 
     def test_exit_distinction_and_null_stdin(self):
         rc, out, err, ok = self.run_fake('import sys; assert sys.stdin.read()==""; print("ok"); sys.exit(2)')
