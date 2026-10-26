@@ -11,6 +11,10 @@ Requires Python **3.9+** (no packages to install). Close Creation Kit first and
 choose your file explicitly. Defaults to `CreationKitPrefs.ini` in the current
 working directory, **not** an automatically discovered game directory.
 
+A standalone Windows EXE **qualification candidate**, not a release, is documented
+in [Windows frozen CLI qualification](docs/windows-frozen-cli.md). Building needs
+Python; only a successful actual hosted Windows job qualifies the resulting EXE.
+
 ## PowerShell quick start
 
 From the directory containing this script, with Python installed:

@@ -9,6 +9,52 @@ permissions:
   contents: read
 
 jobs:
+  windows-frozen-cli:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Initialize fixed sanitized failure evidence
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force frozen-evidence | Out-Null
+          '{"schema":1,"status":"fail","setup_failed":true,"cases":{}}' | Set-Content -Encoding utf8 frozen-evidence/report.json
+      - name: Install pinned build-only dependency
+        run: python -m pip install -r requirements-build.txt
+      - name: Test source and helper, then build exact checkout
+        run: |
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          python -m PyInstaller --clean --noconfirm CKSingleMonitorFix.spec
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Enforce outbound deny and qualify actual EXE only
+        id: smoke
+        shell: pwsh
+        run: ./tools/qualify_windows.ps1
+      - name: Retain sanitized report even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-frozen-cli-report
+          path: frozen-evidence/report.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Retain EXE only after actual qualification passed
+        if: ${{ success() && steps.smoke.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-frozen-cli-qualified-exe
+          path: dist/CKSingleMonitorFix.exe
+          if-no-files-found: error
+          retention-days: 1
+
   unittest:
     strategy:
       fail-fast: false

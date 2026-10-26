@@ -24,3 +24,13 @@ CreationKitPlatformExtended.ini
 /Data
 *.vdf
 Skyrim.ccc
+
+# Frozen build outputs stay local; only the build pin and qualification doc are source.
+/build/
+/dist/
+/.venv-build/
+/frozen-evidence/
+__pycache__/
+*.pyc
+!/requirements-build.txt
+!/docs/windows-frozen-cli.md
