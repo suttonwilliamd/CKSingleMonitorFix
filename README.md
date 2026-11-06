@@ -1,11 +1,12 @@
-# CKSingleMonitorFix v0.1.0
+# CKSingleMonitorFix
 
 A conservative, standard-library Python CLI for repairing off-screen Creation Kit
-window **X coordinates** in an existing `CreationKitPrefs.ini`. The old README
-incorrectly named `CreationKit.ini`; the source has always targeted
+window coordinates in an existing `CreationKitPrefs.ini`. **X-coordinate repair
+is enabled by default; Y-coordinate repair is opt-in with explicit limits.** The
+old README incorrectly named `CreationKit.ini`; the source has always targeted
 **CreationKitPrefs.ini**. This is not a general INI formatter, a GUI, or a guarantee
-that every window will be visible. It does not change Y coordinates, add missing
-keys, detect monitors, or discover game files.
+that every window will be visible. It does not add missing keys, detect monitors,
+or discover game files.
 
 Requires Python **3.9+** (no packages to install). Close Creation Kit first and
 choose your file explicitly. Defaults to `CreationKitPrefs.ini` in the current
@@ -33,6 +34,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Repair failed; read the error above.' }
 
 # Optional: inclusive range for your setup; bad values reset to --min-x.
 py -3 .\CKSingleMonitorFix.py $ini --min-x -1920 --max-x 1920 --dry-run
+# Optional: also repair Y coordinates. Supply BOTH limits for your setup.
+# These are example coordinate limits, not detected monitor dimensions.
+py -3 .\CKSingleMonitorFix.py $ini --min-y 0 --max-y 1079 --dry-run
+# Negative coordinates can represent a monitor above the primary display:
+py -3 .\CKSingleMonitorFix.py $ini --min-y -1080 --max-y 1079 --dry-run
 # Or use the explicit current-directory default:
 py -3 .\CKSingleMonitorFix.py --dry-run
 ```
@@ -42,17 +48,23 @@ required except whatever your selected file/directory already requires.
 
 ## Exact repair behavior
 
-Only existing keys in `RANGES` are candidates (case-insensitive, in any section):
+Only the following existing keys are candidates (case-insensitive, in any section):
 
-- `cell view x`
-- `render window x`
-- `objectwindow x`
+| Axis | Keys | Enabled range |
+| --- | --- | --- |
+| X | `cell view x`, `render window x`, `objectwindow x` | `0..1800` by default; set with `--min-x` / `--max-x` |
+| Y | `cell view y`, `render window y`, `objectwindow y` | Disabled unless **both** `--min-y` and `--max-y` are supplied |
 
-Values must be finite numeric values in the inclusive range `0..1800` by default.
-Non-numeric, empty, NaN, infinite, and out-of-range values are replaced with the
-minimum (`0` by default). Decimals and scientific notation are supported.
-Both limits must be finite numbers, with minimum <= maximum. Negative ranges
-are allowed. Valid values and all other keys are left alone.
+Each axis uses its own finite, inclusive limits. Non-numeric, empty, NaN, infinite,
+and out-of-range values are replaced with that axis's minimum. Decimals and
+scientific notation are supported; minimum must be <= maximum and negative ranges
+are allowed. Supplying only one Y limit, a non-finite limit, or a reversed range
+fails before any repair or backup. Without Y limits, even invalid Y values remain
+untouched. Valid values and all other keys are left alone.
+
+Limits describe allowed **window-origin coordinates**, not window sizes. The tool
+does not know your display work areas or whether a window fits entirely on-screen.
+Choose limits for your setup and inspect the dry-run before repairing.
 
 Exit status: **0** for successful repair, unchanged input, or successful dry-run;
 **1** for rejected input or I/O failure; **2** for command-line syntax errors.
@@ -111,12 +123,18 @@ entry durability are **not** guaranteed preserved. Backups are never auto-delete
 
 ## Python API and development
 
-Importing the module performs no file I/O or printing. The public
-`check_and_fix_ranges(path, *, dry_run=False, min_x=0, max_x=1800)` function remains,
-but now returns a `RepairResult` (`changes`, `backup`, `dry_run`) rather than printing
-and unconditionally rewriting. Invalid input raises `RepairError` (a `ValueError`),
-and filesystem failures raise `OSError`. The obsolete `CaseConfigParser` helper
-was removed because rewriting through it cannot preserve source formatting.
+Importing the module performs no file I/O or printing. The public function is:
+
+```python
+check_and_fix_ranges(path, *, dry_run=False, min_x=0, max_x=1800,
+                     min_y=None, max_y=None)
+```
+
+It returns a `RepairResult` (`changes`, `backup`, `dry_run`). Both Y limits must be
+provided together to enable Y repair; omitted limits preserve X-only behavior.
+Invalid input raises `RepairError` (a `ValueError`), and filesystem failures raise
+`OSError`. The obsolete `CaseConfigParser` helper was removed because rewriting
+through it cannot preserve source formatting.
 
 ```powershell
 py -3 -m unittest discover -s tests -v
@@ -124,5 +142,9 @@ py -3 -m unittest discover -s tests -v
 
 All tests use isolated temporary fixtures; none access real game files. GitHub
 Actions runs the same standard-library tests on public Ubuntu and Windows hosted
-runners. Native Windows results are only established when that workflow is run;
-local Linux results do not prove Windows behavior.
+runners. Local Windows source verification on 2026-11-06 used Python 3.15:
+61 tests ran: 59 passed, with two symlink cases skipped because creation was unavailable.
+An actual CLI roundtrip also checked UTF-16/BOM/comment/line-ending preservation,
+paired-limit rejection, no-write default/dry-run, exact backup, and repeat no-op.
+This is source-CLI evidence, not qualification of a rebuilt standalone EXE or a
+guarantee of visibility in Creation Kit.

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in Y-coordinate repair for existing `cell view y`, `render window y`,
+  and `objectwindow y` keys using paired `--min-y` / `--max-y` limits (or Python
+  API `min_y` / `max_y`). Each axis resets invalid values to its own minimum.
+- Preserve default X-only behavior, supported encodings and untouched bytes,
+  no-write dry-runs, unique exact backups, and atomic replacement. Reject
+  incomplete, reversed, or non-finite Y limits before any repair or backup.
+- Add independent-axis, boundary, opt-in, encoding, invalid-range, missing-key
+  and actual source-CLI regressions; document that limits describe origins,
+  not detected monitor work areas or whole-window visibility.
+
 ## 0.1.0
 
 - Add an import-safe, standard-library CLI for explicitly selected existing

@@ -121,6 +121,95 @@ class RepairTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(),
                          b'[W]\ncell view x=-100\nrender window x=-100\nobjectwindow x=-100\n')
 
+    def test_y_coordinates_are_opt_in(self):
+        original = self.fixture(b'[W]\ncell view x=12\ncell view y=-9999\n'
+                                b'render window y=NaN\nobjectwindow y=offscreen\n')
+        before = self.path.stat().st_mtime_ns
+        result = fix.check_and_fix_ranges(self.path)
+        self.assertEqual(result.changes, ())
+        self.assertIsNone(result.backup)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.path.stat().st_mtime_ns, before)
+        self.assertEqual(self.files(), [self.path.name])
+
+    def test_independent_xy_ranges_preserve_valid_boundaries_and_other_keys(self):
+        original = self.fixture(
+            b'[Windows]\r\ncell view x=-1920\r\nrender window x=1919\r\n'
+            b'objectwindow x=1920\r\n  CeLl View Y : -1080 ; upper monitor\r\n'
+            b'render window y=1079\r\nOBJECTWINDOW Y=1080 # offscreen\r\n'
+            b'other y=9999\r\n[More]\rcell view y=-1081')
+        expected = original.replace(b'objectwindow x=1920', b'objectwindow x=-1920')
+        expected = expected.replace(b'OBJECTWINDOW Y=1080', b'OBJECTWINDOW Y=-1080')
+        expected = expected.replace(b'cell view y=-1081', b'cell view y=-1080')
+        result = fix.check_and_fix_ranges(self.path, min_x=-1920, max_x=1919,
+                                         min_y=-1080, max_y=1079)
+        self.assertEqual(self.path.read_bytes(), expected)
+        self.assertEqual(result.backup.read_bytes(), original)
+        self.assertEqual(len(result.changes), 3)
+        self.assertEqual(fix.check_and_fix_ranges(
+            self.path, min_x=-1920, max_x=1919, min_y=-1080, max_y=1079).changes, ())
+        self.assertEqual(len(list(self.root.glob('*.bak'))), 1)
+
+    def test_y_repair_dry_run_and_supported_encodings(self):
+        for bom, encoding in [(b'', 'utf-8'), (b'\xef\xbb\xbf', 'utf-8'),
+                              (b'\xff\xfe', 'utf-16-le'), (b'\xfe\xff', 'utf-16-be')]:
+            with self.subTest(encoding=encoding, bom=bom):
+                text = '[W]\r\n; café\r\ncell view y=NaN ; keep\nrender window y=\r'
+                text += 'objectwindow y=-Infinity\r\nunrelated=100% # opaque'
+                original = self.fixture(bom + text.encode(encoding))
+                before_files = self.files()
+                result = fix.check_and_fix_ranges(
+                    self.path, min_y='-10.5', max_y='0', dry_run=True)
+                self.assertEqual(len(result.changes), 3)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.files(), before_files)
+                result = fix.check_and_fix_ranges(self.path, min_y='-10.5', max_y='0')
+                expected = text.replace('=NaN', '=-10.5').replace('y=\r', 'y=-10.5\r')
+                expected = expected.replace('=-Infinity', '=-10.5')
+                self.assertEqual(self.path.read_bytes(), bom + expected.encode(encoding))
+                self.assertEqual(result.backup.read_bytes(), original)
+
+    def test_invalid_or_incomplete_y_ranges_reject_before_any_repair(self):
+        original = self.fixture(b'[W]\ncell view x=9999\ncell view y=9999\n')
+        for limits in [{'min_y': 0}, {'max_y': 1080},
+                       {'min_y': 2, 'max_y': 1},
+                       {'min_y': 'NaN', 'max_y': 1},
+                       {'min_y': 0, 'max_y': 'Infinity'},
+                       {'min_y': 'bad', 'max_y': 0}]:
+            with self.subTest(limits=limits):
+                with self.assertRaises(fix.RepairError):
+                    fix.check_and_fix_ranges(self.path, **limits)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.files(), [self.path.name])
+
+    def test_y_limits_do_not_insert_missing_keys(self):
+        original = self.fixture(b'[W]\ncell view x=12\nother y=9999\n')
+        result = fix.check_and_fix_ranges(self.path, min_y=0, max_y=1080)
+        self.assertEqual(result.changes, ())
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.files(), [self.path.name])
+
+    def test_cli_vertical_repair_requires_both_limits_and_preserves_backup(self):
+        original = self.fixture(b'[W]\ncell view x=12\ncell view y=9999 ; keep\r\n')
+        for args, status in [([], 0), (['--min-y', '0'], 1),
+                             (['--max-y', '1079'], 1),
+                             (['--min-y', '0', '--max-y', '1079', '--dry-run'], 0)]:
+            with self.subTest(args=args):
+                proc = subprocess.run([sys.executable, str(SCRIPT), str(self.path), *args],
+                                      capture_output=True, text=True)
+                self.assertEqual(proc.returncode, status, proc.stderr)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.files(), [self.path.name])
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), str(self.path), '--min-y', '0', '--max-y', '1079'],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn('cell view y:', proc.stdout)
+        self.assertEqual(self.path.read_bytes(), b'[W]\ncell view x=12\ncell view y=0 ; keep\r\n')
+        backup = next(self.root.glob('*.bak'))
+        self.assertEqual(backup.read_bytes(), original)
+        self.assertIn(str(backup), proc.stdout)
+
     def test_invalid_ranges_no_writes(self):
         original = self.fixture()
         for minimum, maximum in [('x', 1), ('nan', 1), (0, 'Infinity'), (2, 1)]:

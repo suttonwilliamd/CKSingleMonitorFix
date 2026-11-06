@@ -10,11 +10,8 @@ import stat
 import sys
 import tempfile
 
-RANGES = {
-    'cell view x': (0, 1800),
-    'render window x': (0, 1800),
-    'objectwindow x': (0, 1800),
-}
+X_KEYS = ('cell view x', 'render window x', 'objectwindow x')
+Y_KEYS = ('cell view y', 'render window y', 'objectwindow y')
 
 
 class RepairError(ValueError):
@@ -38,6 +35,13 @@ def _number(value):
     return number
 
 
+def _limits(minimum, maximum, axis):
+    minimum, maximum = _number(minimum), _number(maximum)
+    if minimum > maximum:
+        raise RepairError(f'min-{axis} must be less than or equal to max-{axis}')
+    return minimum, maximum
+
+
 def _decode(data):
     # BOMs are explicit; guessing legacy code pages would risk corrupting text.
     if data.startswith((b'\xff\xfe\x00\x00', b'\x00\x00\xfe\xff')):
@@ -59,7 +63,7 @@ def _decode(data):
     return text, bom, encoding
 
 
-def _plan(text, minimum, maximum):
+def _plan(text, ranges):
     """Validate a deliberately narrow INI dialect, replacing only value spans."""
     lines = text.splitlines(keepends=True)
     changes = []
@@ -86,8 +90,9 @@ def _plan(text, minimum, maximum):
         if not key or key in keys:
             raise RepairError(f'Empty or duplicate key at line {index + 1}')
         keys.add(key)
-        if key not in RANGES:
+        if key not in ranges:
             continue
+        minimum, maximum = ranges[key]
         raw_value = option.group(4)
         # Inline comments start with ; or # preceded by whitespace.
         comment = re.search(r'[ \t]+[;#]', raw_value)
@@ -141,22 +146,25 @@ def _replace(path, original, repaired, mode):
     return backup
 
 
-def check_and_fix_ranges(config_file, *, dry_run=False, min_x=0, max_x=1800):
-    """Repair an existing file; return RepairResult, raising on unsafe input/I/O.
+def check_and_fix_ranges(config_file, *, dry_run=False, min_x=0, max_x=1800,
+                         min_y=None, max_y=None):
+    """Repair existing coordinates; return RepairResult or raise on unsafe input.
 
-    Unlike the old function, this never creates missing files, prints, or rewrites
-    unchanged files. All known X keys use the supplied inclusive range.
+    X keys use the supplied inclusive range. Y keys are left untouched unless
+    both Y limits are provided. Missing keys are never inserted.
     """
-    minimum, maximum = _number(min_x), _number(max_x)
-    if minimum > maximum:
-        raise RepairError('min-x must be less than or equal to max-x')
+    ranges = dict.fromkeys(X_KEYS, _limits(min_x, max_x, 'x'))
+    if min_y is not None or max_y is not None:
+        if min_y is None or max_y is None:
+            raise RepairError('min-y and max-y must be supplied together')
+        ranges.update(dict.fromkeys(Y_KEYS, _limits(min_y, max_y, 'y')))
     path = Path(config_file).absolute()
     info = path.lstat()  # Missing files fail before any output is created.
     if not stat.S_ISREG(info.st_mode):
         raise RepairError('Input must be a regular file, not a symlink or directory')
     original = path.read_bytes()
     text, bom, encoding = _decode(original)
-    repaired, changes = _plan(text, minimum, maximum)
+    repaired, changes = _plan(text, ranges)
     if not changes or dry_run:
         return RepairResult(changes, dry_run=dry_run)
     backup = _replace(path, original, bom + repaired.encode(encoding), info.st_mode)
@@ -170,10 +178,13 @@ def main(argv=None):
     parser.add_argument('--dry-run', action='store_true', help='report only; write nothing')
     parser.add_argument('--min-x', default='0', help='inclusive minimum and reset value (default: 0)')
     parser.add_argument('--max-x', default='1800', help='inclusive maximum (default: 1800)')
+    parser.add_argument('--min-y', help='opt-in inclusive Y minimum and reset value; requires --max-y')
+    parser.add_argument('--max-y', help='opt-in inclusive Y maximum; requires --min-y')
     args = parser.parse_args(argv)
     try:
         result = check_and_fix_ranges(args.path, dry_run=args.dry_run,
-                                      min_x=args.min_x, max_x=args.max_x)
+                                      min_x=args.min_x, max_x=args.max_x,
+                                      min_y=args.min_y, max_y=args.max_y)
     except (OSError, RepairError) as exc:
         print(f'Error: {exc}', file=sys.stderr)
         return 1
