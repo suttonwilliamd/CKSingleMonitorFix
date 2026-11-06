@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Add an explicit `--gui` native Tkinter single-file preview/apply form: manual
+  path selection, X bounds, opt-in paired Y bounds, read-only exact repair report,
+  edit-invalidated and one-attempt Apply, actual backup/error results, and a
+  close-Creation-Kit warning. Startup does not read or write an INI; Tk loads only
+  when requested, and the existing default CLI/import behavior remains available
+  without Tk.
+- Share immutable `preview_repair` / `apply_preview` snapshots with the existing
+  parser, backup and atomic replacement. Reject source bytes/identity changed
+  since Preview before making outputs; preserve no-op and symlink rejection.
+  The final concurrent-writer check remains best-effort, not a process lock.
+- Add source snapshot/error/encoding/no-write regressions and exercise real
+  Windows Tk callbacks/storage, native mouse/keyboard and file selection using
+  synthetic TEMP files and fresh screenshots. Successful repair/no-op and
+  read-only replacement failure preserve exact backups; this does not qualify
+  a rebuilt frozen GUI EXE.
+- Keep an explicitly empty CLI path invalid rather than repairing a different
+  default file. Retain completed-backup metadata on cleanup failures and remove
+  owned Windows read-only temporary files without changing the original INI.
+
 - Add opt-in Y-coordinate repair for existing `cell view y`, `render window y`,
   and `objectwindow y` keys using paired `--min-y` / `--max-y` limits (or Python
   API `min_y` / `max_y`). Each axis resets invalid values to its own minimum.

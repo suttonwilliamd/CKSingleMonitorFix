@@ -6,6 +6,11 @@ EXE is intended to run without a separately installed Python. Only a successful
 actual Windows frozen CI job establishes the bounded qualification below. Linux
 helper regressions and fake children do not establish frozen acceptance.
 
+The source now also offers an explicit `--gui` Tkinter form. The workflow,
+one-file console spec and frozen smoke acceptance here remain **CLI-only**.
+Local source Tk/native-input/file-chooser proof does not establish that Tk/Tcl
+assets are bundled correctly or qualify a frozen GUI; no new EXE was built.
+
 ## Build (PowerShell, Windows AMD64)
 
 Use a clean checkout of the reviewed commit, Python 3.13 x64, and an isolated venv:

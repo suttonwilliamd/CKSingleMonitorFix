@@ -1,12 +1,13 @@
 # CKSingleMonitorFix
 
-A conservative, standard-library Python CLI for repairing off-screen Creation Kit
-window coordinates in an existing `CreationKitPrefs.ini`. **X-coordinate repair
-is enabled by default; Y-coordinate repair is opt-in with explicit limits.** The
-old README incorrectly named `CreationKit.ini`; the source has always targeted
-**CreationKitPrefs.ini**. This is not a general INI formatter, a GUI, or a guarantee
-that every window will be visible. It does not add missing keys, detect monitors,
-or discover game files.
+A conservative, standard-library Python tool for repairing off-screen Creation Kit
+window coordinates in an existing `CreationKitPrefs.ini`, with a CLI and an
+explicit native Tkinter preview/apply window. **X-coordinate repair is enabled by
+default; Y-coordinate repair is opt-in with explicit limits.** The old README
+incorrectly named `CreationKit.ini`; the source has always targeted
+**CreationKitPrefs.ini**. This is not a general INI formatter or a guarantee that
+every window will be visible. It does not add missing keys, detect monitors, or
+discover game files.
 
 Requires Python **3.9+** (no packages to install). Close Creation Kit first and
 choose your file explicitly. Defaults to `CreationKitPrefs.ini` in the current
@@ -45,6 +46,44 @@ py -3 .\CKSingleMonitorFix.py --dry-run
 
 On Ubuntu, substitute `python3` for `py -3`. No administrative privileges are
 required except whatever your selected file/directory already requires.
+
+## Native preview/apply window (Python source)
+
+```powershell
+py -3 .\CKSingleMonitorFix.py --gui
+# Optional: prefill a chosen path and limits, without reading or repairing it:
+py -3 .\CKSingleMonitorFix.py --gui $ini --min-x -1920 --max-x 1919
+```
+
+The GUI requires your Python installation's optional **Tkinter/Tcl/Tk** component.
+Tk is imported only for `--gui`; importing the module and running the CLI work
+without it. If Tk is unavailable or cannot start, the command reports the error
+and exits with status 1, without a substitute GUI or automatic repair.
+
+1. **Close Creation Kit and all other writers.** Browse for one existing INI or
+   enter its path. Opening the GUI does not read or write the selected INI.
+2. Enter inclusive X minimum/maximum. Y is untouched unless you enable **Also
+   repair Y** and supply both Y limits. These are coordinates you choose, not
+   detected monitor dimensions.
+3. Click **Preview**. The read-only report lists the exact proposed repairs by
+   line, section, key, old value and replacement. Preview writes nothing.
+4. Review the report, then explicitly click **Apply preview**. The result shows
+   the actual unique backup path, or the error and any completed retained backup.
+
+Path/range edits (including the Y checkbox) discard the plan and disable Apply.
+No-op previews leave Apply disabled and never rewrite the file or make a backup.
+Each Apply attempt consumes the preview, including failures: preview again before
+retrying. A source whose bytes or observed file identity changed since Preview is
+rejected **before any backup or write**. Changes after Apply's initial check still
+have the existing best-effort check before replacement; there is no cross-process
+lock and a check/replace race remains. Do not run concurrent writers.
+
+Without an explicit path the GUI starts blank; the CLI retains its existing
+current-directory default. CLI bounds can prefill the form; `--dry-run` is
+CLI-only and cannot be combined with `--gui`. The GUI never discovers game files,
+infers monitors, repairs multiple files, restores/deletes backups, or opens
+Creation Kit. A source GUI is **not qualification of a new frozen GUI EXE**:
+the existing packaging workflow and qualification suite remain CLI-scoped.
 
 ## Exact repair behavior
 
@@ -123,7 +162,7 @@ entry durability are **not** guaranteed preserved. Backups are never auto-delete
 
 ## Python API and development
 
-Importing the module performs no file I/O or printing. The public function is:
+Importing the module performs no file I/O or printing and does not load Tk. The CLI API is:
 
 ```python
 check_and_fix_ranges(path, *, dry_run=False, min_x=0, max_x=1800,
@@ -136,6 +175,17 @@ Invalid input raises `RepairError` (a `ValueError`), and filesystem failures rai
 `OSError`. The obsolete `CaseConfigParser` helper was removed because rewriting
 through it cannot preserve source formatting.
 
+For a two-step workflow, `preview_repair(path, *, min_x=0, max_x=1800,
+min_y=None, max_y=None)` returns an immutable `RepairPreview` containing the
+absolute (not symlink-resolved) path, exact `changes`, original/repaired bytes,
+and observed file identity. `apply_preview(preview)` accepts that unchanged plan
+and returns `RepairResult`; stale input raises `RepairError` before creating
+outputs. Obtain plans through `preview_repair`, rather than constructing them.
+Both steps use the same parser and replacement path as the CLI. A later
+replacement failure can attach the completed backup path as `exception.backup`;
+inspect it before retrying. Plans are in-memory snapshots, not saved permissions,
+cross-process locks, or a security boundary for hostile directories.
+
 ```powershell
 py -3 -m unittest discover -s tests -v
 ```
@@ -143,8 +193,22 @@ py -3 -m unittest discover -s tests -v
 All tests use isolated temporary fixtures; none access real game files. GitHub
 Actions runs the same standard-library tests on public Ubuntu and Windows hosted
 runners. Local Windows source verification on 2026-11-06 used Python 3.15:
-61 tests ran: 59 passed, with two symlink cases skipped because creation was unavailable.
-An actual CLI roundtrip also checked UTF-16/BOM/comment/line-ending preservation,
-paired-limit rejection, no-write default/dry-run, exact backup, and repeat no-op.
-This is source-CLI evidence, not qualification of a rebuilt standalone EXE or a
-guarantee of visibility in Creation Kit.
+76 tests ran: 73 passed, with three symlink cases skipped because creation was
+unavailable. Actual CLI subprocess regressions cover dry-run, repair, errors,
+explicit-empty-path rejection and operation with Tk deliberately unavailable.
+Real Windows Tk 9.0 form callbacks were exercised against disposable TEMP
+fixtures: manual path/bounds, paired Y, edit invalidation, invalid bounds,
+stale-source rejection with zero outputs, exact UTF-16/BOM/comment/CRLF repair
+and backup, repeat no-op, malformed/missing input, and a real locked-file
+replacement failure retaining its exact backup.
+
+Independent native mouse/keyboard and file-chooser checks exercised the form,
+bounds editing, preview invalidation, Browse and successful repair. A fresh
+production `--gui` process also confirmed successful byte-exact repair/no-op and
+read-only-input failure with the correct retained backup, original bytes and
+read-only attribute preserved, and no temporary file left behind. Fresh screenshots confirmed the
+visible states; byte comparisons verified the original backups and exact value
+span changes. The broader error matrix above used real toolkit callbacks, not
+mocks. No real game files were accessed. This is source evidence, not
+qualification of a rebuilt standalone EXE or a guarantee of visibility in
+Creation Kit.
